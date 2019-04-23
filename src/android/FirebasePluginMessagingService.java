@@ -58,7 +58,7 @@ public class FirebasePluginMessagingService extends FirebaseMessagingService {
         // [END_EXCLUDE]
 
         // Pass the message to the receiver manager so any registered receivers can decide to handle it
-        boolean wasHandled = FirebasePluginMessageReceiverManager.onMessageReceived(remoteMessage);
+        boolean wasHandled = FirebasePluginMessageReceiverManager.onMessageReceived(remoteMessage, getApplicationContext());
         if (wasHandled) {
             Log.d(TAG, "Message was handled by a registered receiver");
 

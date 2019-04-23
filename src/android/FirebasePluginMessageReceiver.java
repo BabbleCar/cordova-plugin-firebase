@@ -1,11 +1,15 @@
 package org.apache.cordova.firebase;
 
+import android.content.Context;
+
 import com.google.firebase.messaging.RemoteMessage;
 
 public abstract class FirebasePluginMessageReceiver {
 
-    public FirebasePluginMessageReceiver() {
-        FirebasePluginMessageReceiverManager.register(this);
+    protected Context context;
+
+    public FirebasePluginMessageReceiver (Context context) {
+        this.context = context;
     }
 
     /**
