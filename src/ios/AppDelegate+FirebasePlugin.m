@@ -31,7 +31,7 @@
 
 - (BOOL)application:(UIApplication *)application swizzledDidFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     [self application:application swizzledDidFinishLaunchingWithOptions:launchOptions];
-
+    
     // get GoogleService-Info.plist file path
     NSString *filePath = [[NSBundle mainBundle] pathForResource:@"GoogleService-Info" ofType:@"plist"];
     
@@ -48,21 +48,21 @@
         NSLog(@"GoogleService-Info.plist NOT FOUND, setup: [FIRApp defaultApp]");
         [FIRApp configure];
     }
-
+    
     // [START set_messaging_delegate]
     [FIRMessaging messaging].delegate = self;
     // [END set_messaging_delegate]
-    //[FIRMessaging messaging].shouldEstablishDirectChannel = @(YES);
+    
 #if defined(__IPHONE_10_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_10_0
-      //  [UNUserNotificationCenter currentNotificationCenter].delegate = self;
+    [UNUserNotificationCenter currentNotificationCenter].delegate = self;
 #endif
-
+    
     [[NSNotificationCenter defaultCenter] addObserver:self
-                                          selector:@selector(tokenRefreshNotification:)
-                                          name:kFIRInstanceIDTokenRefreshNotification object:nil];
-
+                                             selector:@selector(tokenRefreshNotification:)
+                                                 name:kFIRInstanceIDTokenRefreshNotification object:nil];
+    
     self.applicationInBackground = @(YES);
-
+    
     return YES;
 }
 
@@ -110,18 +110,18 @@
     
     NSDictionary *mutableUserInfo = [userInfo mutableCopy];
     [mutableUserInfo setValue:self.applicationInBackground forKey:@"tap"];
-
+    
     NSLog(@"Foreground apn: %@", mutableUserInfo);
     [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
 }
 
 //Background aps
 - (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
-    fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
-
+fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
+    
     NSDictionary *mutableUserInfo = [userInfo mutableCopy];
     [mutableUserInfo setValue:self.applicationInBackground forKey:@"tap"];
-
+    
     NSLog(@"Background apn: %@", mutableUserInfo);
     [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
     completionHandler(UIBackgroundFetchResultNewData);
@@ -130,7 +130,7 @@
 // [START ios_10_data_message]
 - (void)messaging:(FIRMessaging *)messaging didReceiveMessage:(FIRMessagingRemoteMessage *)remoteMessage {
     NSLog(@"Received data message: %@", remoteMessage.appData);
-
+    
     [FirebasePlugin.firebasePlugin sendNotification:remoteMessage.appData];
 }
 
@@ -143,17 +143,17 @@
 - (void)userNotificationCenter:(UNUserNotificationCenter *)center
        willPresentNotification:(UNNotification *)notification
          withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
-
+    
     //check if local notification
     if (![notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class])
         return;
-
+    
     NSDictionary *mutableUserInfo = [notification.request.content.userInfo mutableCopy];
     [mutableUserInfo setValue:self.applicationInBackground forKey:@"tap"];
-
+    
     NSLog(@"willPresentNotification%@", mutableUserInfo);
     [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
-    completionHandler(UNNotificationPresentationOptionAlert);
+    completionHandler(UNNotificationPresentationOptionNone);
 }
 
 - (void) userNotificationCenter:(UNUserNotificationCenter *)center
@@ -163,10 +163,10 @@
     //check if local notification
     if (![response.notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class])
         return;
-
+    
     NSDictionary *mutableUserInfo = [response.notification.request.content.userInfo mutableCopy];
     [mutableUserInfo setValue:@YES forKey:@"tap"];
-
+    
     NSLog(@"Response %@", mutableUserInfo);
     [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
     completionHandler();
