@@ -6,9 +6,6 @@
 #if defined(__IPHONE_10_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_10_0
 @import UserNotifications;
 
-// Implement UNUserNotificationCenterDelegate to receive display notification via APNS for devices
-// running iOS 10 and above. Implement FIRMessagingDelegate to receive data message via FCM for
-// devices running iOS 10 and above.
 @interface AppDelegate () <UNUserNotificationCenterDelegate, FIRMessagingDelegate>
 @end
 #endif
@@ -17,18 +14,6 @@
 #define kDelegateKey @"delegate"
 
 @implementation AppDelegate (FirebasePlugin)
-
-#if defined(__IPHONE_10_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_10_0
-
-- (void)setDelegate:(id)delegate {
-    objc_setAssociatedObject(self, kDelegateKey, delegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
-- (id)delegate {
-    return objc_getAssociatedObject(self, kDelegateKey);
-}
-
-#endif
 
 + (void)load {
     Method original = class_getInstanceMethod(self, @selector(application:didFinishLaunchingWithOptions:));
@@ -55,8 +40,6 @@
         NSLog(@"GoogleService-Info.plist found, setup: [FIRApp configureWithOptions]");
         // create firebase configure options passing .plist as content
         FIROptions *options = [[FIROptions alloc] initWithContentsOfFile:filePath];
-        
-        // configure FIRApp with options
         [FIRApp configureWithOptions:options];
     }
     
@@ -69,13 +52,14 @@
     // [START set_messaging_delegate]
     [FIRMessaging messaging].delegate = self;
     // [END set_messaging_delegate]
+    //[FIRMessaging messaging].shouldEstablishDirectChannel = @(YES);
 #if defined(__IPHONE_10_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_10_0
-    self.delegate = [UNUserNotificationCenter currentNotificationCenter].delegate;
-        [UNUserNotificationCenter currentNotificationCenter].delegate = self;
+      //  [UNUserNotificationCenter currentNotificationCenter].delegate = self;
 #endif
 
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(tokenRefreshNotification:)
-                                                 name:kFIRInstanceIDTokenRefreshNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                          selector:@selector(tokenRefreshNotification:)
+                                          name:kFIRInstanceIDTokenRefreshNotification object:nil];
 
     self.applicationInBackground = @(YES);
 
@@ -85,34 +69,33 @@
 - (void)applicationDidBecomeActive:(UIApplication *)application {
     [self connectToFcm];
     self.applicationInBackground = @(NO);
-    }
+}
 
 - (void)applicationDidEnterBackground:(UIApplication *)application {
-    [[FIRMessaging messaging] disconnect];
+    [FIRMessaging messaging].shouldEstablishDirectChannel = @(FALSE);
     self.applicationInBackground = @(YES);
     NSLog(@"Disconnected from FCM");
 }
 
 - (void)tokenRefreshNotification:(NSNotification *)notification {
-    // Note that this callback will be fired everytime a new token is generated, including the first
-    // time. So if you need to retrieve the token as soon as it is available this is where that
-    // should be done.
-    NSString *refreshedToken = [[FIRInstanceID instanceID] token];
-    NSLog(@"InstanceID token: %@", refreshedToken);
-
-    // Connect to FCM since connection may have failed when attempted before having a token.
-    [self connectToFcm];
-    [FirebasePlugin.firebasePlugin sendToken:refreshedToken];
+    [[FIRInstanceID instanceID] instanceIDWithHandler:^(FIRInstanceIDResult * _Nullable result, NSError * _Nullable error) {
+        if (error != nil) {
+            NSLog(@"Error fetching remote instance ID: %@", error);
+        } else {
+            NSLog(@"InstanceID token: %@", result.token);
+            [FirebasePlugin.firebasePlugin sendToken:result.token];
+        }
+    }];
 }
 
 - (void)connectToFcm {
-    [[FIRMessaging messaging] connectWithCompletion:^(NSError * _Nullable error) {
+    [FIRMessaging messaging].shouldEstablishDirectChannel = @(TRUE);
+    [[FIRInstanceID instanceID] instanceIDWithHandler:^(FIRInstanceIDResult * _Nullable result, NSError * _Nullable error) {
         if (error != nil) {
-            NSLog(@"Unable to connect to FCM. %@", error);
+            NSLog(@"Error fetching remote instance ID: %@", error);
         } else {
             NSLog(@"Connected to FCM.");
-            NSString *refreshedToken = [[FIRInstanceID instanceID] token];
-            NSLog(@"InstanceID token: %@", refreshedToken);
+            NSLog(@"InstanceID token: %@", result.token);
         }
     }];
 }
@@ -122,42 +105,37 @@
     NSLog(@"deviceToken1 = %@", deviceToken);
 }
 
+//Foreground aps
 - (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo {
+    
     NSDictionary *mutableUserInfo = [userInfo mutableCopy];
-
     [mutableUserInfo setValue:self.applicationInBackground forKey:@"tap"];
 
-    // Print full message.
-    NSLog(@"%@", mutableUserInfo);
-
+    NSLog(@"Foreground apn: %@", mutableUserInfo);
     [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
 }
 
+//Background aps
 - (void)application:(UIApplication *)application didReceiveRemoteNotification:(NSDictionary *)userInfo
     fetchCompletionHandler:(void (^)(UIBackgroundFetchResult))completionHandler {
 
     NSDictionary *mutableUserInfo = [userInfo mutableCopy];
-
     [mutableUserInfo setValue:self.applicationInBackground forKey:@"tap"];
-    // Print full message.
-    NSLog(@"%@", mutableUserInfo);
-    completionHandler(UIBackgroundFetchResultNewData);
+
+    NSLog(@"Background apn: %@", mutableUserInfo);
     [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
+    completionHandler(UIBackgroundFetchResultNewData);
 }
 
 // [START ios_10_data_message]
-// Receive data messages on iOS 10+ directly from FCM (bypassing APNs) when the app is in the foreground.
-// To enable direct data messages, you can set [Messaging messaging].shouldEstablishDirectChannel to YES.
 - (void)messaging:(FIRMessaging *)messaging didReceiveMessage:(FIRMessagingRemoteMessage *)remoteMessage {
     NSLog(@"Received data message: %@", remoteMessage.appData);
 
-    // This will allow us to handle FCM data-only push messages even if the permission for push
-    // notifications is yet missing. This will only work when the app is in the foreground.
     [FirebasePlugin.firebasePlugin sendNotification:remoteMessage.appData];
 }
 
 - (void)application:(UIApplication *)application didFailToRegisterForRemoteNotificationsWithError:(NSError *)error {
-  NSLog(@"Unable to register for remote notifications: %@", error);
+    NSLog(@"Unable to register for remote notifications: %@", error);
 }
 
 // [END ios_10_data_message]
@@ -166,44 +144,31 @@
        willPresentNotification:(UNNotification *)notification
          withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler {
 
-    [self.delegate userNotificationCenter:center
-              willPresentNotification:notification
-                withCompletionHandler:completionHandler];
-
+    //check if local notification
     if (![notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class])
         return;
 
     NSDictionary *mutableUserInfo = [notification.request.content.userInfo mutableCopy];
-
     [mutableUserInfo setValue:self.applicationInBackground forKey:@"tap"];
 
-    // Print full message.
-    NSLog(@"%@", mutableUserInfo);
-
-    completionHandler(UNNotificationPresentationOptionAlert);
+    NSLog(@"willPresentNotification%@", mutableUserInfo);
     [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
+    completionHandler(UNNotificationPresentationOptionAlert);
 }
 
 - (void) userNotificationCenter:(UNUserNotificationCenter *)center
  didReceiveNotificationResponse:(UNNotificationResponse *)response
-          withCompletionHandler:(void (^)(void))completionHandler
-{
-    [self.delegate userNotificationCenter:center
-       didReceiveNotificationResponse:response
-                withCompletionHandler:completionHandler];
-
+          withCompletionHandler:(void (^)(void))completionHandler {
+    
+    //check if local notification
     if (![response.notification.request.trigger isKindOfClass:UNPushNotificationTrigger.class])
         return;
 
     NSDictionary *mutableUserInfo = [response.notification.request.content.userInfo mutableCopy];
-
     [mutableUserInfo setValue:@YES forKey:@"tap"];
 
-    // Print full message.
     NSLog(@"Response %@", mutableUserInfo);
-
     [FirebasePlugin.firebasePlugin sendNotification:mutableUserInfo];
-
     completionHandler();
 }
 

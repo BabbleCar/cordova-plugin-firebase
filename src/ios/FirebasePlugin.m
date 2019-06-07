@@ -10,6 +10,7 @@
 @import FirebaseRemoteConfig;
 @import FirebasePerformance;
 @import FirebaseAuth;
+@import Intents;
 
 #if defined(__IPHONE_10_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_10_0
 @import UserNotifications;
@@ -56,13 +57,19 @@ static FirebasePlugin *firebasePlugin;
 
 // DEPRECATED - alias of getToken
 - (void)getInstanceId:(CDVInvokedUrlCommand *)command {
-    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:[[FIRInstanceID instanceID] token]];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    [self getToken:command];
 }
 
 - (void)getToken:(CDVInvokedUrlCommand *)command {
-    CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:[[FIRInstanceID instanceID] token]];
-    [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+    [[FIRInstanceID instanceID] instanceIDWithHandler:^(FIRInstanceIDResult * _Nullable result, NSError * _Nullable error) {
+        if (error != nil) {
+            NSLog(@"Error fetching remote instance ID: %@", error);
+        } else {
+            NSLog(@"InstanceID token: %@", result.token);
+            CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:result.token];
+            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+        }
+    }];
 }
 
 - (void)hasPermission:(CDVInvokedUrlCommand *)command {
@@ -107,27 +114,31 @@ static FirebasePlugin *firebasePlugin;
 
 
 #if defined(__IPHONE_10_0) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_10_0
-    UNAuthorizationOptions authOptions = UNAuthorizationOptionAlert|UNAuthorizationOptionSound|UNAuthorizationOptionBadge;
+     UNAuthorizationOptions authOptions = UNAuthorizationOptionAlert|UNAuthorizationOptionSound|UNAuthorizationOptionBadge|UNAuthorizationOptionCarPlay;
     [[UNUserNotificationCenter currentNotificationCenter]
         requestAuthorizationWithOptions:authOptions
                       completionHandler:^(BOOL granted, NSError * _Nullable error) {
-
+                          UNNotificationCategory *cat = [UNNotificationCategory
+                                                         categoryWithIdentifier:@"messages"
+                                                         actions:@[]
+                                                         intentIdentifiers:@[INSearchForMessagesIntentIdentifier]
+                                                         options: UNNotificationCategoryOptionAllowInCarPlay];
+                          [[UNUserNotificationCenter currentNotificationCenter] setNotificationCategories:[NSSet setWithObject:cat]];                          NSLog(@"error: %@", error);
             if (![NSThread isMainThread]) {
                 dispatch_sync(dispatch_get_main_queue(), ^{
-                    [[FIRMessaging messaging] setDelegate:self];
                     [[UIApplication sharedApplication] registerForRemoteNotifications];
 
                     CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus: granted ? CDVCommandStatus_OK : CDVCommandStatus_ERROR];
                     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
                 });
             } else {
-                [[FIRMessaging messaging] setDelegate:self];
                 [[UIApplication sharedApplication] registerForRemoteNotifications];
                 CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
                 [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
             }
         }
     ];
+    
 #else
     [[UIApplication sharedApplication] registerForRemoteNotifications];
     CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
@@ -231,11 +242,15 @@ static FirebasePlugin *firebasePlugin;
 
 - (void)onTokenRefresh:(CDVInvokedUrlCommand *)command {
     self.tokenRefreshCallbackId = command.callbackId;
-    NSString* currentToken = [[FIRInstanceID instanceID] token];
-
-    if (currentToken != nil) {
-        [self sendToken:currentToken];
-    }
+    
+    [[FIRInstanceID instanceID] instanceIDWithHandler:^(FIRInstanceIDResult * _Nullable result, NSError * _Nullable error) {
+        if (error != nil) {
+            NSLog(@"Error fetching remote instance ID: %@", error);
+        } else {
+            NSLog(@"InstanceID token: %@", result.token);
+             [self sendToken:result.token];
+        }
+    }];
 }
 
 - (void)sendNotification:(NSDictionary *)userInfo {
@@ -473,10 +488,8 @@ static FirebasePlugin *firebasePlugin;
 }
 
 - (void)clearAllNotifications:(CDVInvokedUrlCommand *)command {
+    [[UIApplication sharedApplication] setApplicationIconBadgeNumber:0];
 	[self.commandDelegate runInBackground:^{
-        [[UIApplication sharedApplication] setApplicationIconBadgeNumber:1];
-        [[UIApplication sharedApplication] setApplicationIconBadgeNumber:0];
-
         CDVPluginResult *pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
     }];
