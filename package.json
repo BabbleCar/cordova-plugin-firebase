@@ -1,17 +1,17 @@
 {
   "author": {
-    "name": "Robert Arnesson"
+    "name": "Robert Christophe"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/arnesson/cordova-plugin-firebase"
+    "url": "https://github.com/BabbleCar/cordova-plugin-firebase.git"
   },
-  "name": "cordova-plugin-firebase",
-  "version": "2.0.5",
-  "description": "Cordova plugin for Google Firebase",
+  "name": "cordova-plugin-firebase2",
+  "version": "2.1.0",
+  "description": "Cordova plugin for Google Firebase - With new manager",
   "cordova": {
-    "id": "cordova-plugin-firebase",
+    "id": "cordova-plugin-firebase2",
     "platforms": [
       "android",
       "ios",
